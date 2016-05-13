@@ -1,4 +1,4 @@
-package fi.aalto.spark.kafka;
+package fi.aalto.spark.kafka.writer;
 
 import java.io.Serializable;
 import java.util.Properties;
@@ -26,10 +26,8 @@ public class KafkaProducerPool implements Serializable {
 
 	private final Properties properties;
 
-	public KafkaProducerPool() {
-		throw new RuntimeException("KafkaProducerPool-Default constructor!!");
-		
-	}
+	private final int minIdle;
+
 	/**
 	 * Creates the pool.
 	 *
@@ -39,7 +37,8 @@ public class KafkaProducerPool implements Serializable {
 	public KafkaProducerPool(final int minIdle, final Properties properties) {
 		// initialize pool
 		this.properties = properties;
-		initialize(minIdle);
+		this.minIdle = minIdle;
+		initialize();
 
 	}
 
@@ -60,8 +59,9 @@ public class KafkaProducerPool implements Serializable {
 	public KafkaProducerPool(final int minIdle, final int maxIdle,
 			final long validationInterval, final Properties properties) {
 		// initialize pool
-		initialize(minIdle);
 		this.properties = properties;
+		this.minIdle = minIdle;
+		initialize();
 
 		// check pool conditions in a separate thread
 		executorService = Executors.newSingleThreadScheduledExecutor();
@@ -92,6 +92,8 @@ public class KafkaProducerPool implements Serializable {
 	 * @return T borrowed object
 	 */
 	public synchronized KafkaProducer<String, String> borrowProducer() {
+		if (pool == null)
+			initialize();
 		KafkaProducer<String, String> object;
 		if ((object = pool.poll()) == null) {
 			object = createProducer();
@@ -110,7 +112,6 @@ public class KafkaProducerPool implements Serializable {
 		if (producer == null) {
 			return;
 		}
-
 		this.pool.offer(producer);
 	}
 
@@ -137,11 +138,19 @@ public class KafkaProducerPool implements Serializable {
 		return producer;
 	}
 
-	private void initialize(final int minIdle) {
+	private void initialize() {
 		pool = new ConcurrentLinkedQueue<KafkaProducer<String, String>>();
 
 		for (int i = 0; i < minIdle; i++) {
 			pool.add(createProducer());
+		}
+	}
+
+	public void closeAll() {
+		KafkaProducer<String, String> object;
+		while ((object = pool.poll()) != null) {
+			object.flush();
+			object.close();
 		}
 	}
 }

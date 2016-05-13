@@ -1,3 +1,4 @@
+package fi.aalto.spark.kafka.writer;
 //package fi.aalto.spark.kafka;
 //
 //import java.io.Serializable;
